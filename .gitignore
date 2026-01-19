@@ -1,0 +1,37 @@
+# --- Build Artifacts ---
+golb
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# --- Test Artifacts ---
+# Created when you run 'go test -cover'
+*.out
+*.test
+
+# --- Dependencies ---
+# If you decide to use a vendor folder later, strictly speaking, 
+# you might want to commit it. But often in local dev, you ignore it.
+vendor/
+
+# --- IDE & OS ---
+# Mac system files
+.DS_Store
+# Windows system files
+Thumbs.db
+# VS Code
+.vscode/
+# IntelliJ / GoLand
+.idea/
+
+# --- Logs ---
+# Your load balancer might generate log files
+*.log
+
+# --- Configuration & Secrets ---
+# It is best practice to ignore your actual config file if it has secrets/IPs.
+# Instead, commit a file named 'config.example.yaml' as a template.
+config.yaml
+.env
