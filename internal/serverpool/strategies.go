@@ -2,6 +2,7 @@ package serverpool
 
 import (
 	"golb/internal/backend"
+	"sync"
 	"sync/atomic"
 )
 
@@ -12,7 +13,6 @@ type RoundRobin struct {
 
 func (r *RoundRobin) GetNextPeer(backends []*backend.Backend) *backend.Backend {
 	next := int(atomic.AddUint64(&r.current, 1) % uint64(len(backends)))
-
 
 	l := len(backends) + next
 	for i := next; i < l; i++ {
@@ -48,5 +48,40 @@ func (l *LeastConnections) GetNextPeer(backends []*backend.Backend) *backend.Bac
 			best = b
 		}
 	}
+	return best
+}
+
+// WeightedRoundRobin
+type WeightedRoundRobin struct {
+	mu sync.Mutex 
+}
+
+func (w *WeightedRoundRobin) GetNextPeer(backends []*backend.Backend) *backend.Backend {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var best *backend.Backend
+	totalWeight := 0
+
+	for _, b := range backends {
+		if !b.IsAlive() {
+			continue
+		}
+
+		totalWeight += b.Weight
+
+		b.CurrentWeight += b.Weight
+
+		if best == nil || b.CurrentWeight > best.CurrentWeight {
+			best = b
+		}
+	}
+
+	if best == nil {
+		return nil
+	}
+
+	best.CurrentWeight -= totalWeight
+
 	return best
 }

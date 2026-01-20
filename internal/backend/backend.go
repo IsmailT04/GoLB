@@ -13,7 +13,8 @@ type Backend struct {
 	alive       bool         //Live or dead
 	lock        sync.RWMutex //lock to handle write and read of status
 	connections int64        // Storing active requests
-	Weight      int          // For Weighted Round Robin
+	Weight      int          // Static config
+	CurrentWeight int //Dynamic "Score"
 	proxy       *httputil.ReverseProxy
 }
 
