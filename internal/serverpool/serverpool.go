@@ -2,7 +2,10 @@ package serverpool
 
 import (
 	"golb/internal/backend"
+	"log"
+	"net"
 	"sync/atomic"
+	"time"
 )
 
 type ServerPool struct {
@@ -34,4 +37,27 @@ func (s *ServerPool) GetNextPeer() *backend.Backend {
 
 	}
 	return nil
+}
+
+func (s *ServerPool) HealthCheck() {
+	for _, backend := range s.Backends {
+		url := backend.Url
+		conn, err := net.DialTimeout("tcp", url.Host, 2*time.Second)
+		if err != nil {
+			backend.SetAlive(false)
+		} else {
+			conn.Close()
+			backend.SetAlive(true)
+		}
+	}
+}
+
+func (s *ServerPool) StartHealthCheck() {
+	t := time.NewTicker(20 * time.Second)
+
+	for {
+		log.Println("Starting health check...")
+		s.HealthCheck()
+		<-t.C
+	}
 }

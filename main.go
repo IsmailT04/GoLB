@@ -17,6 +17,7 @@ func main() {
 		"http://localhost:8081",
 		"http://localhost:8082",
 		"http://localhost:8083",
+		"http://localhost:8084",
 	}
 
 	// Add backends to the pool
@@ -47,6 +48,8 @@ func main() {
 		// Forward the request to the selected peer
 		peer.ServeHTTP(w, r)
 	})
+
+	go pool.StartHealthCheck()
 
 	log.Println("Load Balancer started on :8080")
 
