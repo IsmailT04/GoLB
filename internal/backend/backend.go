@@ -22,7 +22,7 @@ func (b *Backend) SetAlive(alive bool) {
 
 func (b *Backend) IsAlive() bool {
 	b.lock.RLock()
-	defer b.lock.Unlock()
+	defer b.lock.RUnlock()
 	return b.alive
 }
 
