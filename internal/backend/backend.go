@@ -1,30 +1,51 @@
 package backend
 
 import (
+	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type Backend struct {
-	Url         *url.URL
-	alive       bool         //Live or dead
-	lock        sync.RWMutex //lock to handle write and read of status
-	connections int64        // Storing active requests
-	Weight      int          // Static config
-	CurrentWeight int //Dynamic "Score"
-	proxy       *httputil.ReverseProxy
+	Url           *url.URL
+	alive         bool         //Live or dead
+	lock          sync.RWMutex //lock to handle write and read of status
+	connections   int64        // Storing active requests
+	Weight        int          // Static config
+	CurrentWeight int          //Dynamic "Score"
+	proxy         *httputil.ReverseProxy
 }
 
 // NewBackend initializes a backend with a reverse proxy
-func NewBackend(u *url.URL) *Backend {
+func NewBackend(u *url.URL, weight int) *Backend {
+	proxy := httputil.NewSingleHostReverseProxy(u)
+
+	// Custom Transport to handle timeouts (prevents hanging connections)
+	proxy.Transport = &http.Transport{
+		MaxIdleConns:    100,
+		IdleConnTimeout: 90 * time.Second,
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("[%s] Proxy Request Error: %v", u.Host, err)
+		w.WriteHeader(http.StatusBadGateway)
+	}
+
 	return &Backend{
 		Url:    u,
 		alive:  true,
-		Weight: 1,
-		proxy:  httputil.NewSingleHostReverseProxy(u),
+		Weight: weight,
+		proxy:  proxy,
 	}
 }
 

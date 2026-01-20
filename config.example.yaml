@@ -1,0 +1,9 @@
+lb_port: 8080
+strategy: "round-robin" # Options: round-robin, weighted-round-robin, least-connections
+backends:
+  - url: "http://localhost:8081"
+    weight: 1
+  - url: "http://localhost:8082"
+    weight: 3
+  - url: "http://localhost:8083"
+    weight: 1
