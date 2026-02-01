@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"golb/internal/backend"
 	"golb/internal/config"
+	"golb/internal/middleware"
 	"golb/internal/serverpool"
 	"log"
 	"net/http"
@@ -48,13 +49,9 @@ func main() {
 	// 5. Start Health Checks
 	go pool.StartHealthCheck()
 
-	// 6. Start Server
-	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.LBPort),
-		Handler: nil,
-	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// 6. Define the Core Load Balancing Logic
+	// This is the "final destination" handler
+	lbHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		peer := pool.GetNextPeer()
 		if peer != nil {
 			peer.ServeHTTP(w, r)
@@ -62,6 +59,20 @@ func main() {
 		}
 		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 	})
+
+	// 7. Chain the Middleware
+	// Flow: Request -> RateLimit -> Auth -> Cache -> LBHandler
+	handler := middleware.RateLimit(cfg,
+		middleware.Auth(cfg,
+			middleware.Cache(cfg, lbHandler),
+		),
+	)
+
+	// 8. Start Server
+	server := http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.LBPort),
+		Handler: handler, // Use the wrapped handler
+	}
 
 	log.Printf("Load Balancer started on port %d using %s strategy", cfg.LBPort, cfg.Strategy)
 	if err := server.ListenAndServe(); err != nil {

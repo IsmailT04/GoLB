@@ -1,5 +1,14 @@
 lb_port: 8080
-strategy: "round-robin" # Options: round-robin, weighted-round-robin, least-connections
+strategy: "weighted-round-robin"
+
+enable_auth: true
+auth_token: "my-secret"
+
+enable_ratelimit: true
+rate_limit_per_min: 5
+
+enable_cache: true
+
 backends:
   - url: "http://localhost:8081"
     weight: 1
