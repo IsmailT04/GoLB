@@ -14,6 +14,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -28,10 +30,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 3. Initialize Server Pool and inject logger
+	// 3. Initialize Redis (for distributed rate limit and cache)
+	if cfg.RedisAddr == "" {
+		cfg.RedisAddr = "localhost:6379"
+	}
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		logger.Error("failed to connect to redis", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("connected to redis", "addr", cfg.RedisAddr)
+
+	// 4. Initialize Server Pool and inject logger
 	pool := &serverpool.ServerPool{Logger: logger}
 
-	// 4. Set Strategy
+	// 5. Set Strategy
 	switch cfg.Strategy {
 	case "round-robin":
 		pool.Strategy = &serverpool.RoundRobin{}
@@ -44,7 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 5. Configure Backends
+	// 6. Configure Backends
 	for _, b := range cfg.Backends {
 		u, err := url.Parse(b.URL)
 		if err != nil {
@@ -56,10 +73,10 @@ func main() {
 		logger.Info("added backend", "url", b.URL, "weight", b.Weight)
 	}
 
-	// 6. Start Health Checks
+	// 7. Start Health Checks
 	go pool.StartHealthCheck()
 
-	// 7. Define the Core Load Balancing Logic
+	// 8. Define the Core Load Balancing Logic
 	lbHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		peer := pool.GetNextPeer()
 		if peer != nil {
@@ -69,11 +86,11 @@ func main() {
 		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 	})
 
-	// 8. Chain the Middleware (Metrics wraps the chain for the main server)
+	// 9. Chain the Middleware (Metrics wraps the chain for the main server)
 	handler := middleware.Metrics(
-		middleware.RateLimit(cfg,
+		middleware.RateLimit(cfg, rdb,
 			middleware.Auth(cfg,
-				middleware.Cache(cfg, lbHandler),
+				middleware.Cache(cfg, rdb, lbHandler),
 			),
 		),
 	)
@@ -89,7 +106,7 @@ func main() {
 			logger.Error("metrics server error", "error", err)
 		}
 	}()
-	// 9. Server with timeouts (anti-Slowloris) and MaxHeaderBytes
+	// 10. Server with timeouts (anti-Slowloris) and MaxHeaderBytes
 	server := http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.LBPort),
 		Handler:           handler,
@@ -100,7 +117,7 @@ func main() {
 		MaxHeaderBytes:    1 << 20, // 1 MB
 	}
 
-	// 10. Start server in a goroutine (HTTP or HTTPS)
+	// 11. Start server in a goroutine (HTTP or HTTPS)
 	go func() {
 		var serveErr error
 		if cfg.CertFile != "" && cfg.KeyFile != "" {
@@ -120,7 +137,7 @@ func main() {
 	}
 	logger.Info("load balancer started", "port", cfg.LBPort, "strategy", cfg.Strategy, "scheme", scheme)
 
-	// 11. Signal channel for graceful shutdown
+	// 12. Signal channel for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan

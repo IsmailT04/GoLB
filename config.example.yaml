@@ -1,4 +1,4 @@
-# Env overrides (12-factor): LB_PORT, AUTH_TOKEN, CERT_FILE, KEY_FILE, GOLB_STRATEGY
+# Env overrides (12-factor): LB_PORT, AUTH_TOKEN, CERT_FILE, KEY_FILE, GOLB_STRATEGY, REDIS_ADDR, REDIS_PASSWORD, REDIS_DB
 
 lb_port: 8080
 strategy: "weighted-round-robin"
@@ -10,6 +10,11 @@ enable_ratelimit: true
 rate_limit_per_min: 5
 
 enable_cache: true
+
+# Redis (distributed rate limit + cache). Default addr: localhost:6379
+redis_addr: "localhost:6379"
+# redis_password: ""
+# redis_db: 0
 
 # TLS: set both to enable HTTPS (or use CERT_FILE / KEY_FILE env vars)
 # cert_file: "/etc/golb/tls.crt"

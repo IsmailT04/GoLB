@@ -29,6 +29,11 @@ type Config struct {
 	// TLS: if both set, server uses ListenAndServeTLS
 	CertFile string `yaml:"cert_file"`
 	KeyFile  string `yaml:"key_file"`
+
+	// Redis (for distributed rate limit and cache)
+	RedisAddr     string `yaml:"redis_addr"`
+	RedisPassword string `yaml:"redis_password"`
+	RedisDB       int    `yaml:"redis_db"`
 }
 
 // LoadConfig reads the file at path, unmarshals it, then applies env var overrides (12-factor).
@@ -60,6 +65,17 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if v := os.Getenv("GOLB_STRATEGY"); v != "" {
 		c.Strategy = v
+	}
+	if v := os.Getenv("REDIS_ADDR"); v != "" {
+		c.RedisAddr = v
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		c.RedisPassword = v
+	}
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		if db, err := strconv.Atoi(v); err == nil {
+			c.RedisDB = db
+		}
 	}
 
 	return &c, nil
