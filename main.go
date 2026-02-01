@@ -69,13 +69,26 @@ func main() {
 		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 	})
 
-	// 8. Chain the Middleware
-	handler := middleware.RateLimit(cfg,
-		middleware.Auth(cfg,
-			middleware.Cache(cfg, lbHandler),
+	// 8. Chain the Middleware (Metrics wraps the chain for the main server)
+	handler := middleware.Metrics(
+		middleware.RateLimit(cfg,
+			middleware.Auth(cfg,
+				middleware.Cache(cfg, lbHandler),
+			),
 		),
 	)
 
+	// Metrics server on separate port (isolates admin from user traffic)
+	go func() {
+		metricsServer := http.Server{
+			Addr:    ":9090",
+			Handler: middleware.MetricsHandler(),
+		}
+		logger.Info("metrics server starting", "port", 9090)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("metrics server error", "error", err)
+		}
+	}()
 	// 9. Server with timeouts (anti-Slowloris) and MaxHeaderBytes
 	server := http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.LBPort),
