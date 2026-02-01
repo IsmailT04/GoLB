@@ -1,7 +1,7 @@
 package backend
 
 import (
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -19,10 +19,11 @@ type Backend struct {
 	Weight        int          // Static config
 	CurrentWeight int          //Dynamic "Score"
 	proxy         *httputil.ReverseProxy
+	Logger        *slog.Logger // optional; if nil, uses slog.Default()
 }
 
-// NewBackend initializes a backend with a reverse proxy
-func NewBackend(u *url.URL, weight int) *Backend {
+// NewBackend initializes a backend with a reverse proxy. logger may be nil (uses slog.Default()).
+func NewBackend(u *url.URL, weight int, logger *slog.Logger) *Backend {
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	// Custom Transport to handle timeouts (prevents hanging connections)
@@ -36,8 +37,13 @@ func NewBackend(u *url.URL, weight int) *Backend {
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
 
+	if logger == nil {
+		logger = slog.Default()
+	}
+	log := logger
+	host := u.Host
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("[%s] Proxy Request Error: %v", u.Host, err)
+		log.Warn("proxy request error", "host", host, "error", err)
 		w.WriteHeader(http.StatusBadGateway)
 	}
 
@@ -46,6 +52,7 @@ func NewBackend(u *url.URL, weight int) *Backend {
 		alive:  true,
 		Weight: weight,
 		proxy:  proxy,
+		Logger: logger,
 	}
 }
 

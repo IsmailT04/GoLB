@@ -2,7 +2,7 @@ package serverpool
 
 import (
 	"golb/internal/backend"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 )
@@ -10,6 +10,7 @@ import (
 type ServerPool struct {
 	Backends []*backend.Backend
 	Strategy BalancingStrategy
+	Logger   *slog.Logger // optional; if nil, uses slog.Default()
 }
 
 func (s *ServerPool) AddBackend(backend *backend.Backend) {
@@ -37,9 +38,13 @@ func (s *ServerPool) HealthCheck() {
 
 // StartHealthCheck runs in a loop
 func (s *ServerPool) StartHealthCheck() {
+	log := s.Logger
+	if log == nil {
+		log = slog.Default()
+	}
 	t := time.NewTicker(20 * time.Second)
 	for {
-		log.Println("Starting health check...")
+		log.Debug("starting health check")
 		s.HealthCheck()
 		<-t.C
 	}

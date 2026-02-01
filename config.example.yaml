@@ -1,3 +1,5 @@
+# Env overrides (12-factor): LB_PORT, AUTH_TOKEN, CERT_FILE, KEY_FILE, GOLB_STRATEGY
+
 lb_port: 8080
 strategy: "weighted-round-robin"
 
@@ -8,6 +10,10 @@ enable_ratelimit: true
 rate_limit_per_min: 5
 
 enable_cache: true
+
+# TLS: set both to enable HTTPS (or use CERT_FILE / KEY_FILE env vars)
+# cert_file: "/etc/golb/tls.crt"
+# key_file: "/etc/golb/tls.key"
 
 backends:
   - url: "http://localhost:8081"

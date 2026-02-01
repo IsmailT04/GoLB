@@ -3,7 +3,7 @@ package middleware
 import (
     "bytes"
     "golb/internal/config"
-    "log"
+    "log/slog"
     "net"
     "net/http"
     "sync"
@@ -117,7 +117,7 @@ func Cache(cfg *config.Config, next http.Handler) http.Handler {
         cMu.RUnlock()
 
         if found && time.Now().Before(entry.Expiry) {
-            log.Printf("Serving from cache: %s", url)
+            slog.Info("serving from cache", "url", url)
             w.Header().Set("Content-Type", entry.ContentType)
             w.Header().Set("X-Cache", "HIT")
             w.Write(entry.Body)
