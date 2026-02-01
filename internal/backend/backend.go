@@ -12,18 +12,21 @@ import (
 )
 
 type Backend struct {
-	Url           *url.URL
-	alive         bool         //Live or dead
-	lock          sync.RWMutex //lock to handle write and read of status
-	connections   int64        // Storing active requests
-	Weight        int          // Static config
-	CurrentWeight int          //Dynamic "Score"
-	proxy         *httputil.ReverseProxy
-	Logger        *slog.Logger // optional; if nil, uses slog.Default()
+	Url                    *url.URL
+	alive                  bool         // Live or dead (circuit open/closed)
+	lock                   sync.RWMutex
+	connections            int64        // Storing active requests
+	Weight                 int          // Static config
+	CurrentWeight          int          // Dynamic "Score"
+	proxy                  *httputil.ReverseProxy
+	Logger                 *slog.Logger // optional; if nil, uses slog.Default()
+	consecutiveFailures     int64        // atomic: current failure count
+	maxConsecutiveFailures  int64        // threshold to trip circuit breaker
 }
 
 // NewBackend initializes a backend with a reverse proxy. logger may be nil (uses slog.Default()).
-func NewBackend(u *url.URL, weight int, logger *slog.Logger) *Backend {
+// maxConsecutiveFailures is the circuit breaker threshold; if <= 0, defaults to 3.
+func NewBackend(u *url.URL, weight int, logger *slog.Logger, maxConsecutiveFailures int64) *Backend {
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	// Custom Transport to handle timeouts (prevents hanging connections)
@@ -40,20 +43,38 @@ func NewBackend(u *url.URL, weight int, logger *slog.Logger) *Backend {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	log := logger
-	host := u.Host
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Warn("proxy request error", "host", host, "error", err)
+	if maxConsecutiveFailures <= 0 {
+		maxConsecutiveFailures = 3
+	}
+
+	b := &Backend{
+		Url:                   u,
+		alive:                 true,
+		Weight:                weight,
+		proxy:                 proxy,
+		Logger:                logger,
+		maxConsecutiveFailures: maxConsecutiveFailures,
+	}
+
+	// ErrorHandler: increment failure count, trip circuit if threshold reached
+	b.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		count := atomic.AddInt64(&b.consecutiveFailures, 1)
+		b.Logger.Warn("proxy request error", "host", b.Url.Host, "error", err, "consecutive_failures", count)
+
+		if count >= b.maxConsecutiveFailures {
+			b.SetAlive(false)
+			b.Logger.Warn("circuit breaker tripped: marking backend as dead", "url", b.Url.String(), "failures", count)
+		}
 		w.WriteHeader(http.StatusBadGateway)
 	}
 
-	return &Backend{
-		Url:    u,
-		alive:  true,
-		Weight: weight,
-		proxy:  proxy,
-		Logger: logger,
+	// ModifyResponse: reset failure count on success (close / reset the "streak")
+	b.proxy.ModifyResponse = func(*http.Response) error {
+		atomic.StoreInt64(&b.consecutiveFailures, 0)
+		return nil
 	}
+
+	return b
 }
 
 func (b *Backend) SetAlive(alive bool) {
@@ -70,6 +91,11 @@ func (b *Backend) IsAlive() bool {
 
 func (b *Backend) GetActiveConnections() int64 {
 	return atomic.LoadInt64(&b.connections)
+}
+
+// ResetConsecutiveFailures resets the failure counter (e.g. when health check restores the backend).
+func (b *Backend) ResetConsecutiveFailures() {
+	atomic.StoreInt64(&b.consecutiveFailures, 0)
 }
 
 // ServeHTTP satisfies the http.Handler interface and tracks connections

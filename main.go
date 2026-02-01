@@ -51,7 +51,7 @@ func main() {
 			logger.Error("failed to parse backend URL", "url", b.URL, "error", err)
 			os.Exit(1)
 		}
-		backendInstance := backend.NewBackend(u, b.Weight, logger)
+		backendInstance := backend.NewBackend(u, b.Weight, logger, b.MaxConsecutiveFailures)
 		pool.AddBackend(backendInstance)
 		logger.Info("added backend", "url", b.URL, "weight", b.Weight)
 	}

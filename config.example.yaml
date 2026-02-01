@@ -18,7 +18,10 @@ enable_cache: true
 backends:
   - url: "http://localhost:8081"
     weight: 1
+    max_consecutive_failures: 3
   - url: "http://localhost:8082"
     weight: 3
+    max_consecutive_failures: 3
   - url: "http://localhost:8083"
     weight: 1
+    max_consecutive_failures: 3

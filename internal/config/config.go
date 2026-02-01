@@ -8,8 +8,9 @@ import (
 )
 
 type BackendConfig struct {
-	URL    string `yaml:"url"`
-	Weight int    `yaml:"weight"`
+	URL                    string `yaml:"url"`
+	Weight                 int    `yaml:"weight"`
+	MaxConsecutiveFailures int64  `yaml:"max_consecutive_failures"`
 }
 
 type Config struct {

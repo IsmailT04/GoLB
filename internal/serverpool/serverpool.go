@@ -22,16 +22,16 @@ func (s *ServerPool) GetNextPeer() *backend.Backend {
 	return s.Strategy.GetNextPeer(s.Backends)
 }
 
-// HealthCheck loops through backends and pings them
+// HealthCheck loops through backends and pings them. When a backend is alive, its failure counter is reset.
 func (s *ServerPool) HealthCheck() {
-	for _, backend := range s.Backends {
-		url := backend.Url
-		conn, err := net.DialTimeout("tcp", url.Host, 2*time.Second)
+	for _, be := range s.Backends {
+		conn, err := net.DialTimeout("tcp", be.Url.Host, 2*time.Second)
 		if err != nil {
-			backend.SetAlive(false)
+			be.SetAlive(false)
 		} else {
 			conn.Close()
-			backend.SetAlive(true)
+			be.SetAlive(true)
+			be.ResetConsecutiveFailures() // sync with circuit breaker: clean slate when health check restores
 		}
 	}
 }
